@@ -1,0 +1,47 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "User Profile",
+      "description": "Stores user information and preferences.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "The unique ID of the user." },
+        "displayName": { "type": "string", "description": "The display name of the user." },
+        "email": { "type": "string", "description": "The email address of the user." },
+        "photoURL": { "type": "string", "description": "The URL of the user's profile picture." },
+        "preferredRole": { "type": "string", "description": "The user's target role." },
+        "preferredType": { "type": "string", "description": "The user's preferred interview type." },
+        "preferredDifficulty": { "type": "string", "description": "The user's preferred difficulty level." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "When the profile was created." }
+      },
+      "required": ["uid", "email"]
+    },
+    "InterviewSession": {
+      "title": "Interview Session",
+      "description": "Stores the progress and results of an interview session.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "The ID of the user who owns this session." },
+        "role": { "type": "string", "description": "The target role for the interview." },
+        "type": { "type": "string", "description": "The type of interview (Technical/HR)." },
+        "difficulty": { "type": "string", "description": "The difficulty level." },
+        "questions": { "type": "array", "items": { "type": "object" }, "description": "The list of generated questions." },
+        "results": { "type": "array", "items": { "type": "object" }, "description": "The list of answers and evaluations." },
+        "currentIndex": { "type": "integer", "description": "The index of the current question." },
+        "status": { "type": "string", "enum": ["active", "completed"], "description": "The status of the session." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "When the session was last updated." }
+      },
+      "required": ["uid", "role", "type", "difficulty", "status"]
+    }
+  },
+  "firestore": {
+    "/users/{uid}": {
+      "schema": "UserProfile",
+      "description": "User profile document."
+    },
+    "/sessions/{sessionId}": {
+      "schema": "InterviewSession",
+      "description": "Interview session document."
+    }
+  }
+}

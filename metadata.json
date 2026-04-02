@@ -1,0 +1,5 @@
+{
+  "name": "AI Interview Simulator",
+  "description": "A professional AI-powered interview simulator that generates dynamic questions and evaluates answers using Google Gemini.",
+  "requestFramePermissions": []
+}
