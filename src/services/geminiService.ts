@@ -10,10 +10,29 @@ export interface Evaluation {
   feedback: string;
 }
 
+function formatGeminiError(errorText: string) {
+  const normalized = errorText.toLowerCase();
+
+  if (
+    normalized.includes("resource_exhausted") ||
+    normalized.includes("quota exceeded") ||
+    normalized.includes("you exceeded your current quota") ||
+    normalized.includes("\"code\":429")
+  ) {
+    return "AI usage limit reached right now. Please wait a bit and try again.";
+  }
+
+  if (normalized.includes("missing gemini api key")) {
+    return "AI service is not configured correctly right now.";
+  }
+
+  return errorText || "Request failed";
+}
+
 async function handleResponse<T>(response: Response): Promise<T> {
   if (!response.ok) {
     const errorText = await response.text();
-    throw new Error(errorText || "Request failed");
+    throw new Error(formatGeminiError(errorText));
   }
 
   return response.json() as Promise<T>;
