@@ -4,6 +4,37 @@ import { Mail, Lock, Loader2, Chrome } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { useNavigate } from "react-router-dom";
 
+function getAuthErrorMessage(error: unknown) {
+  const code =
+    typeof error === "object" && error !== null && "code" in error
+      ? String((error as { code?: string }).code)
+      : "";
+
+  switch (code) {
+    case "auth/email-already-in-use":
+      return "This email is already registered. Please sign in instead.";
+    case "auth/invalid-email":
+      return "Please enter a valid email address.";
+    case "auth/weak-password":
+      return "Password should be at least 6 characters long.";
+    case "auth/user-not-found":
+    case "auth/invalid-credential":
+      return "Invalid email or password.";
+    case "auth/wrong-password":
+      return "Incorrect password. Please try again.";
+    case "auth/popup-closed-by-user":
+      return "Google sign-in was closed before it finished.";
+    case "auth/popup-blocked":
+      return "Your browser blocked the Google sign-in popup. Please allow popups and try again.";
+    case "auth/unauthorized-domain":
+      return "This app domain is not authorized in Firebase Authentication settings.";
+    case "auth/operation-not-allowed":
+      return "This sign-in method is not enabled in Firebase Authentication.";
+    default:
+      return "Authentication failed. Please try again.";
+  }
+}
+
 export default function Login() {
   const { login, loginWithEmail, signUp } = useAuth();
   const navigate = useNavigate();
@@ -26,8 +57,8 @@ export default function Login() {
         await loginWithEmail(email, password);
       }
       navigate("/home");
-    } catch (err: any) {
-      setError(err.message || "Authentication failed. Please try again.");
+    } catch (err) {
+      setError(getAuthErrorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -39,8 +70,8 @@ export default function Login() {
     try {
       await login();
       navigate("/home");
-    } catch (err: any) {
-      setError(err.message || "Google login failed.");
+    } catch (err) {
+      setError(getAuthErrorMessage(err));
     } finally {
       setLoading(false);
     }
