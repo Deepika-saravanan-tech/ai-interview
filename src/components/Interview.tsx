@@ -49,6 +49,7 @@ export default function Interview() {
   const [isRecording, setIsRecording] = useState(false);
   const [speechSupported, setSpeechSupported] = useState(false);
   const [speechError, setSpeechError] = useState<string | null>(null);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const answerRef = useRef("");
@@ -145,6 +146,28 @@ export default function Interview() {
     return `${mins}:${secs.toString().padStart(2, "0")}`;
   };
 
+  const runWithTimeout = async <T,>(promise: Promise<T>, timeoutMs: number) => {
+    return Promise.race<T>([
+      promise,
+      new Promise<T>((_, reject) => {
+        setTimeout(() => reject(new Error("Evaluation is taking too long. Please try again.")), timeoutMs);
+      }),
+    ]);
+  };
+
+  const persistSessionUpdate = async (updates: Record<string, unknown>) => {
+    if (!sessionId) return;
+
+    try {
+      await updateDoc(doc(db, "sessions", sessionId), {
+        ...updates,
+        updatedAt: serverTimestamp(),
+      });
+    } catch (error) {
+      console.error("Error saving session progress:", error);
+    }
+  };
+
   const handleRecordingToggle = () => {
     const recognition = recognitionRef.current;
     if (!recognition) return;
@@ -156,6 +179,7 @@ export default function Interview() {
     }
 
     setSpeechError(null);
+    setSubmitError(null);
     recordingBaseRef.current = answerRef.current.trim();
     recognition.start();
     setIsRecording(true);
@@ -170,10 +194,14 @@ export default function Interview() {
     }
 
     setShowError(false);
+    setSubmitError(null);
     setSubmitting(true);
 
     try {
-      const evaluation = await evaluateAnswer(questions[currentIndex].text, answer);
+      const evaluation = await runWithTimeout(
+        evaluateAnswer(questions[currentIndex].text, answer),
+        45000,
+      );
 
       const newResult = {
         question: questions[currentIndex].text,
@@ -195,27 +223,24 @@ export default function Interview() {
         if (recognitionRef.current) {
           recognitionRef.current.stop();
         }
-
-        if (sessionId) {
-          await updateDoc(doc(db, "sessions", sessionId), {
-            currentIndex: nextIndex,
-            results: updatedResults,
-            updatedAt: serverTimestamp(),
-          });
-        }
+        void persistSessionUpdate({
+          currentIndex: nextIndex,
+          results: updatedResults,
+        });
       } else {
-        if (sessionId) {
-          await updateDoc(doc(db, "sessions", sessionId), {
-            results: updatedResults,
-            status: "completed",
-            updatedAt: serverTimestamp(),
-          });
-        }
-
+        void persistSessionUpdate({
+          results: updatedResults,
+          status: "completed",
+        });
         navigate("/result", { state: { results: updatedResults } });
       }
     } catch (error) {
       console.error("Error evaluating answer:", error);
+      setSubmitError(
+        error instanceof Error
+          ? error.message
+          : "We could not evaluate your answer right now. Please try again.",
+      );
     } finally {
       setSubmitting(false);
     }
@@ -323,6 +348,9 @@ export default function Interview() {
                   if (showError && e.target.value.trim()) {
                     setShowError(false);
                   }
+                  if (submitError) {
+                    setSubmitError(null);
+                  }
                 }}
                 placeholder="Type your answer here..."
                 disabled={submitting}
@@ -340,6 +368,12 @@ export default function Interview() {
               {speechError && (
                 <p className="text-red-500 text-xs font-semibold mt-1 ml-1">
                   {speechError}
+                </p>
+              )}
+
+              {submitError && (
+                <p className="text-red-500 text-xs font-semibold mt-1 ml-1">
+                  {submitError}
                 </p>
               )}
 
