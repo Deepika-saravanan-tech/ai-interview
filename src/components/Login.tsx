@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { motion } from "motion/react";
 import { Mail, Lock, Loader2, Chrome } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
@@ -36,7 +36,7 @@ function getAuthErrorMessage(error: unknown) {
 }
 
 export default function Login() {
-  const { login, loginWithEmail, signUp } = useAuth();
+  const { user, loading: authLoading, login, loginWithEmail, signUp } = useAuth();
   const navigate = useNavigate();
   const [isSignUp, setIsSignUp] = useState(false);
   const [email, setEmail] = useState("");
@@ -44,6 +44,12 @@ export default function Login() {
   const [name, setName] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!authLoading && user) {
+      navigate("/home", { replace: true });
+    }
+  }, [authLoading, user, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
