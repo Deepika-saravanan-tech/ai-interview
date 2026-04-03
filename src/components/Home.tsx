@@ -1,10 +1,15 @@
 import React, { useState, useEffect } from "react";
 import { motion } from "motion/react";
-import { Loader2, ArrowLeft, User as UserIcon, LogOut } from "lucide-react";
+import { Loader2, ArrowLeft, User as UserIcon, LogOut, History, TrendingUp, Trophy } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
-import { db, doc, setDoc, getDoc, collection, serverTimestamp } from "../firebase";
+import { db, doc, setDoc, getDoc, collection, serverTimestamp, query, where, getDocs } from "../firebase";
 import { useNavigate } from "react-router-dom";
 import { generateQuestions } from "../services/geminiService";
+
+type SessionRecord = {
+  status?: string;
+  results?: { evaluation: { score: number } }[];
+};
 
 export default function Home() {
   const { user, logout } = useAuth();
@@ -14,6 +19,11 @@ export default function Home() {
   const [type, setType] = useState("Technical");
   const [difficulty, setDifficulty] = useState("Medium");
   const [isGenerating, setIsGenerating] = useState(false);
+  const [historyStats, setHistoryStats] = useState({
+    completedSessions: 0,
+    latestScore: 0,
+    bestScore: 0,
+  });
 
   useEffect(() => {
     const fetchPreferences = async () => {
@@ -33,6 +43,37 @@ export default function Home() {
       }
     };
     fetchPreferences();
+  }, [user]);
+
+  useEffect(() => {
+    const fetchHistoryStats = async () => {
+      if (!user) return;
+
+      try {
+        const sessionsQuery = query(collection(db, "sessions"), where("uid", "==", user.uid));
+        const snapshot = await getDocs(sessionsQuery);
+        const completedSessions = snapshot.docs
+          .map((docSnapshot) => docSnapshot.data() as SessionRecord)
+          .filter((session) => session.status === "completed" && (session.results?.length ?? 0) > 0);
+
+        const scores = completedSessions.map((session) =>
+          Math.round(
+            (session.results ?? []).reduce((total, item) => total + item.evaluation.score, 0) /
+              Math.max((session.results ?? []).length, 1),
+          ),
+        );
+
+        setHistoryStats({
+          completedSessions: completedSessions.length,
+          latestScore: scores[scores.length - 1] ?? 0,
+          bestScore: scores.length > 0 ? Math.max(...scores) : 0,
+        });
+      } catch (error) {
+        console.error("Error fetching history stats:", error);
+      }
+    };
+
+    fetchHistoryStats();
   }, [user]);
 
   const handleStart = async (e: React.FormEvent) => {
@@ -102,11 +143,12 @@ export default function Home() {
           Back
         </button>
 
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="max-w-md mx-auto bg-white p-10 rounded-3xl shadow-xl border border-slate-100 mt-8"
-        >
+        <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_22rem] gap-8 items-start mt-8">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="max-w-md w-full mx-auto lg:mx-0 bg-white p-10 rounded-3xl shadow-xl border border-slate-100"
+          >
           <div className="text-center mb-10">
             <h1 className="text-3xl font-bold text-slate-900 tracking-tight mb-3">Start Practice</h1>
             <p className="text-slate-500 leading-relaxed">AI-powered interview practice platform</p>
@@ -187,7 +229,61 @@ export default function Home() {
               )}
             </button>
           </form>
-        </motion.div>
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.05 }}
+            className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100"
+          >
+            <div className="flex items-center gap-2 mb-6">
+              <History size={18} className="text-primary" />
+              <h2 className="text-xl font-bold text-slate-900">Your Progress</h2>
+            </div>
+
+            <div className="space-y-4 mb-6">
+              <div className="rounded-2xl bg-slate-50 border border-slate-100 p-4">
+                <div className="flex items-center gap-2 text-primary mb-2">
+                  <History size={16} />
+                  <span className="text-xs font-bold uppercase tracking-widest">Completed Interviews</span>
+                </div>
+                <p className="text-3xl font-black text-slate-900">{historyStats.completedSessions}</p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="rounded-2xl bg-slate-50 border border-slate-100 p-4">
+                  <div className="flex items-center gap-2 text-green-600 mb-2">
+                    <TrendingUp size={16} />
+                    <span className="text-xs font-bold uppercase tracking-widest">Latest</span>
+                  </div>
+                  <p className="text-2xl font-black text-slate-900">{historyStats.latestScore}</p>
+                </div>
+
+                <div className="rounded-2xl bg-slate-50 border border-slate-100 p-4">
+                  <div className="flex items-center gap-2 text-amber-600 mb-2">
+                    <Trophy size={16} />
+                    <span className="text-xs font-bold uppercase tracking-widest">Best</span>
+                  </div>
+                  <p className="text-2xl font-black text-slate-900">{historyStats.bestScore}</p>
+                </div>
+              </div>
+            </div>
+
+            <p className="text-sm text-slate-500 leading-relaxed mb-6">
+              Review your earlier interview reports, compare scores, and track how your answers are improving over time.
+            </p>
+
+            <button
+              type="button"
+              onClick={() => navigate("/history")}
+              className="w-full bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-bold py-4 rounded-xl flex items-center justify-center gap-2 transition-all"
+            >
+              <History size={18} />
+              View History
+            </button>
+          </motion.div>
+        </div>
       </div>
     </div>
   );
