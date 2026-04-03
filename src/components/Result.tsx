@@ -57,6 +57,7 @@ export default function Result() {
               Restart Interview
             </button>
             <button
+              onClick={() => navigate("/history")}
               className="px-8 py-4 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-bold rounded-xl flex items-center gap-2 transition-all"
             >
               <History size={20} />

@@ -8,6 +8,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import Home from "./components/Home";
 import Interview from "./components/Interview";
 import Result from "./components/Result";
+import History from "./components/History";
 import Login from "./components/Login";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 
@@ -55,6 +56,14 @@ function AppContent() {
           element={
             <ProtectedRoute>
               <Result />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/history"
+          element={
+            <ProtectedRoute>
+              <History />
             </ProtectedRoute>
           }
         />
