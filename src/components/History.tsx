@@ -7,10 +7,12 @@ import {
   CalendarDays,
   MessageSquareText,
   ChevronRight,
+  Trash2,
+  Loader2,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import { db, collection, getDocs, query, where } from "../firebase";
+import { db, collection, deleteDoc, doc, getDocs, query, where } from "../firebase";
 
 type Evaluation = {
   score: number;
@@ -100,12 +102,16 @@ export default function History() {
   const { user } = useAuth();
   const [sessions, setSessions] = useState<CompletedSession[]>([]);
   const [loading, setLoading] = useState(true);
+  const [historyError, setHistoryError] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deletingAll, setDeletingAll] = useState(false);
 
   useEffect(() => {
     const fetchSessions = async () => {
       if (!user) return;
 
       setLoading(true);
+      setHistoryError(null);
       try {
         const sessionsQuery = query(collection(db, "sessions"), where("uid", "==", user.uid));
         const snapshot = await getDocs(sessionsQuery);
@@ -125,6 +131,7 @@ export default function History() {
         setSessions(completedSessions);
       } catch (error) {
         console.error("Error loading interview history:", error);
+        setHistoryError("Unable to load interview history right now.");
       } finally {
         setLoading(false);
       }
@@ -155,6 +162,43 @@ export default function History() {
     };
   }, [sessions]);
 
+  // Deletes one completed session and updates local UI after Firestore succeeds.
+  const handleDeleteSession = async (sessionId: string) => {
+    const confirmed = window.confirm("Are you sure you want to delete this history item?");
+    if (!confirmed) return;
+
+    setDeletingId(sessionId);
+    setHistoryError(null);
+
+    try {
+      await deleteDoc(doc(db, "sessions", sessionId));
+      setSessions((prev) => prev.filter((session) => session.id !== sessionId));
+    } catch (error) {
+      console.error("Error deleting history item:", error);
+      setHistoryError("Unable to delete that history item. Please try again.");
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const handleDeleteAllHistory = async () => {
+    const confirmed = window.confirm("Are you sure you want to delete all history?");
+    if (!confirmed || sessions.length === 0) return;
+
+    setDeletingAll(true);
+    setHistoryError(null);
+
+    try {
+      await Promise.all(sessions.map((session) => deleteDoc(doc(db, "sessions", session.id))));
+      setSessions([]);
+    } catch (error) {
+      console.error("Error deleting all history:", error);
+      setHistoryError("Unable to delete all history right now. Please try again.");
+    } finally {
+      setDeletingAll(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-white py-12 px-6">
       <div className="max-w-5xl mx-auto">
@@ -172,6 +216,25 @@ export default function History() {
             Review your previous interview sessions, track score changes, and focus on your next improvement areas.
           </p>
         </div>
+
+        <div className="flex flex-wrap justify-end gap-3 mb-6">
+          <button
+            type="button"
+            onClick={handleDeleteAllHistory}
+            disabled={deletingAll || sessions.length === 0}
+            title="Delete all history"
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl border border-red-200 text-red-600 bg-red-50 hover:bg-red-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm font-semibold"
+          >
+            {deletingAll ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
+            Delete All History
+          </button>
+        </div>
+
+        {historyError && (
+          <div className="mb-6 rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm font-medium text-red-600">
+            {historyError}
+          </div>
+        )}
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
           <div className="rounded-3xl border border-slate-100 bg-white p-6 shadow-sm">
@@ -233,7 +296,7 @@ export default function History() {
                 initial={{ opacity: 0, y: 12 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: index * 0.05 }}
-                className="rounded-3xl border border-slate-100 bg-white p-8 shadow-sm"
+                className="rounded-3xl border border-slate-100 bg-white p-8 shadow-md shadow-slate-100/70"
               >
                 <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6 mb-6">
                   <div>
@@ -249,12 +312,28 @@ export default function History() {
                     </p>
                   </div>
 
-                  <div
-                    className={`inline-flex items-center justify-center px-5 py-3 rounded-2xl border text-2xl font-black ${getScoreTone(
-                      session.averageScore,
-                    )}`}
-                  >
-                    {session.averageScore}
+                  <div className="flex items-start gap-3">
+                    <div
+                      className={`inline-flex items-center justify-center px-5 py-3 rounded-2xl border text-2xl font-black ${getScoreTone(
+                        session.averageScore,
+                      )}`}
+                    >
+                      {session.averageScore}
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteSession(session.id)}
+                      disabled={deletingAll || deletingId === session.id}
+                      title="Delete"
+                      className="inline-flex items-center justify-center h-11 w-11 rounded-2xl border border-slate-200 bg-white text-slate-500 hover:text-red-600 hover:border-red-200 hover:bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    >
+                      {deletingId === session.id ? (
+                        <Loader2 size={18} className="animate-spin" />
+                      ) : (
+                        <Trash2 size={18} />
+                      )}
+                    </button>
                   </div>
                 </div>
 

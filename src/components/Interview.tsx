@@ -8,6 +8,8 @@ import {
   Clock,
   Mic,
   MicOff,
+  Volume2,
+  Square,
 } from "lucide-react";
 import { evaluateAnswer, Evaluation } from "../services/geminiService";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -50,14 +52,28 @@ export default function Interview() {
   const [speechSupported, setSpeechSupported] = useState(false);
   const [speechError, setSpeechError] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [ttsSupported, setTtsSupported] = useState(false);
+  const [isReadingQuestion, setIsReadingQuestion] = useState(false);
+  const [speechRate, setSpeechRate] = useState("1");
 
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const answerRef = useRef("");
   const recordingBaseRef = useRef("");
+  const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
 
   useEffect(() => {
     answerRef.current = answer;
   }, [answer]);
+
+  useEffect(() => {
+    setTtsSupported(typeof window !== "undefined" && "speechSynthesis" in window);
+
+    return () => {
+      if ("speechSynthesis" in window) {
+        window.speechSynthesis.cancel();
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (!sessionId || !questions) {
@@ -140,10 +156,51 @@ export default function Interview() {
     };
   }, [showError]);
 
+  useEffect(() => {
+    stopReadingQuestion();
+    // We only want to stop the previous readout when the active question changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentIndex]);
+
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return `${mins}:${secs.toString().padStart(2, "0")}`;
+  };
+
+  const stopReadingQuestion = () => {
+    if (!ttsSupported) return;
+
+    window.speechSynthesis.cancel();
+    utteranceRef.current = null;
+    setIsReadingQuestion(false);
+  };
+
+  // Reads the current interview question aloud using the browser TTS engine.
+  const handleReadQuestion = () => {
+    if (!ttsSupported || !currentQuestion?.text) return;
+
+    window.speechSynthesis.cancel();
+
+    const utterance = new SpeechSynthesisUtterance(currentQuestion.text);
+    utterance.rate = Number(speechRate);
+    utterance.pitch = 1;
+    utteranceRef.current = utterance;
+
+    utterance.onend = () => {
+      setIsReadingQuestion(false);
+      utteranceRef.current = null;
+    };
+
+    utterance.onerror = () => {
+      setSpeechError("Question audio could not be played right now.");
+      setIsReadingQuestion(false);
+      utteranceRef.current = null;
+    };
+
+    setSpeechError(null);
+    setIsReadingQuestion(true);
+    window.speechSynthesis.speak(utterance);
   };
 
   const runWithTimeout = async <T,>(promise: Promise<T>, timeoutMs: number) => {
@@ -178,6 +235,7 @@ export default function Interview() {
       return;
     }
 
+    stopReadingQuestion();
     setSpeechError(null);
     setSubmitError(null);
     recordingBaseRef.current = answerRef.current.trim();
@@ -219,6 +277,7 @@ export default function Interview() {
         recordingBaseRef.current = "";
         setTimeLeft(300);
         setSpeechError(null);
+        stopReadingQuestion();
 
         if (recognitionRef.current) {
           recognitionRef.current.stop();
@@ -228,6 +287,7 @@ export default function Interview() {
           results: updatedResults,
         });
       } else {
+        stopReadingQuestion();
         void persistSessionUpdate({
           results: updatedResults,
           status: "completed",
@@ -301,8 +361,47 @@ export default function Interview() {
               exit={{ opacity: 0, y: -10 }}
               className="mb-8"
             >
-              <div className="inline-block px-3 py-1 bg-accent text-primary text-[10px] font-bold uppercase tracking-widest rounded-full mb-4">
-                Question
+              <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+                <div className="inline-block px-3 py-1 bg-accent text-primary text-[10px] font-bold uppercase tracking-widest rounded-full">
+                  Question
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  {ttsSupported && (
+                    <>
+                      <label className="text-xs font-semibold text-slate-500" htmlFor="speech-rate">
+                        Speed
+                      </label>
+                      <select
+                        id="speech-rate"
+                        value={speechRate}
+                        onChange={(e) => setSpeechRate(e.target.value)}
+                        disabled={submitting}
+                        className="px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm text-slate-700 outline-none"
+                        title="Reading speed"
+                      >
+                        <option value="0.85">0.85x</option>
+                        <option value="1">1.0x</option>
+                        <option value="1.15">1.15x</option>
+                        <option value="1.3">1.3x</option>
+                      </select>
+                      <button
+                        type="button"
+                        onClick={isReadingQuestion ? stopReadingQuestion : handleReadQuestion}
+                        disabled={submitting}
+                        title={isReadingQuestion ? "Stop reading" : "Read question"}
+                        className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl border text-sm font-semibold transition-colors ${
+                          isReadingQuestion
+                            ? "bg-slate-900 text-white border-slate-900"
+                            : "bg-white border-slate-200 text-slate-700 hover:border-primary hover:text-primary"
+                        }`}
+                      >
+                        {isReadingQuestion ? <Square size={16} /> : <Volume2 size={16} />}
+                        {isReadingQuestion ? "Stop" : "Read"}
+                      </button>
+                    </>
+                  )}
+                </div>
               </div>
               <h3 className="text-2xl font-bold text-slate-900 leading-snug">
                 {currentQuestion.text}
